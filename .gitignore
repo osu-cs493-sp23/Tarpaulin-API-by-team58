@@ -1,1 +1,3 @@
 node_modules/
+startdb.bash
+stopdb.bash
