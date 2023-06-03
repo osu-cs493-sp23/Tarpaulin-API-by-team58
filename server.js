@@ -3,6 +3,8 @@ const app = express()
 
 const port = 8000
 
+app.use(express.json())
+
 app.use(function (req, res, next) {
     console.log("== Request received")
     console.log("   -- Method:", req.method)
