@@ -1,16 +1,24 @@
 const express = require('express')
+const morgan = require('morgan')
+
+const api = require('./api')
+const sequelize = require('./lib/sequelize')
+
 const app = express()
+const port = process.env.PORT || 8000
 
-const port = 8000
-
+/*
+ * Morgan is a popular request logger.
+ */
+app.use(morgan('dev'))
 app.use(express.json())
 
-app.use(function (req, res, next) {
-    console.log("== Request received")
-    console.log("   -- Method:", req.method)
-    console.log("   -- URL:", req.url)
-    next()
-})
+/*
+ * All routes for the API are written in modules in the api/ directory.  The
+ * top-level router lives in api/index.js.  That's what we include here, and
+ * it provides all of the routes.
+ */
+app.use('/', api)
 
 //This route will catch invalid URL and return
 //a response with a 404 status to client
@@ -31,7 +39,12 @@ app.use('*', function (err, req, res, next) {
     })
 })
   
-
-app.listen(port, function() {
-    console.log("== Server is running on port", port)
-})
+/*
+ * Start the API server listening for requests after establishing a connection
+ * to the MySQL server.
+ */
+sequelize.sync().then(function () {
+    app.listen(port, function() {
+      console.log("== Server is running on port", port)
+    })
+  })
