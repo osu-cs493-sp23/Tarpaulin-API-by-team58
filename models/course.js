@@ -1,7 +1,9 @@
 const { DataTypes } = require("sequelize")
 const sequelize = require("../lib/sequelize.js")
 
-const Course = sequelize.define("course", {
+const { Assignment } = require("./assignment.js")
+
+const courseFields = {
 	subject: {
 		type: DataTypes.STRING,
 		allowNull: false,
@@ -22,7 +24,9 @@ const Course = sequelize.define("course", {
 		allowNull: false,
 		unique: false
 	}
-}, {
+}
+
+const Course = sequelize.define("course", courseFields, {
 	indexes: [
 		{
 			unique: true,
@@ -30,3 +34,13 @@ const Course = sequelize.define("course", {
 		}
 	]
 })
+
+Course.hasMany(Assignment, {
+	onDelete: "CASCADE",
+	onUpdate: "CASCADE",
+	foreignKey: {allowNull: false}
+})
+Assignment.belongsTo(Course)
+
+exports.Course = Course
+exports.courseClientFields = Object.keys(courseFields)

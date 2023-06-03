@@ -1,5 +1,8 @@
 const express = require('express')
 const app = express()
+const sequelize = require("./lib/sequelize.js")
+
+const api = require("./api")
 
 const port = 8000
 
@@ -12,7 +15,18 @@ app.use(function (req, res, next) {
     next()
 })
 
+app.use("/", api)
 
-app.listen(port, function() {
-    console.log("== Server is running on port", port)
+app.use("*", function (req, res, next){
+	res.status(404).json({error: `${req.originalUrl} does not exist.`})
+})
+
+app.use("*", function (err, req, res, next){
+	res.status(500).json({error: "Server error. Please try again later"})
+})
+
+sequelize.sync().then(function (){
+	app.listen(port, function() {
+		console.log("== Server is running on port", port)
+	})
 })
