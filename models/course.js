@@ -44,3 +44,4 @@ Assignment.belongsTo(Course)
 
 exports.Course = Course
 exports.courseClientFields = Object.keys(courseFields)
+exports.courseClientFields.push("instructorId")

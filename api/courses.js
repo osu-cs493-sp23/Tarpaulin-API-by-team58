@@ -152,4 +152,32 @@ router.post("/", async function (req, res, next){
 	res.status(201).json({id: course.id})
 })
 
+
+
+router.patch("/:courseId", async function (req, res, next){
+	const courseId = parseInt(req.params.courseId) || 0
+
+	var patchResult = null
+	try {
+		patchResult = await Course.update(req.body, {
+			where: {id: courseId},
+			fields: courseClientFields
+		})
+	} catch (err){
+		if (err instanceof ValidationError){
+			res.status(400).json({error: "The request body was either not present or did not contain any fields related to Course objects."})
+		} else {
+			next(err)
+		}
+		return
+	}
+
+	if (patchResult[0] > 0){
+		res.status(200).send()
+	} else {
+		next()
+	}
+})
+
+
 module.exports = router
