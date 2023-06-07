@@ -16,5 +16,5 @@ docker  run -d --name tarpaulin-server `
 mysql
 ```
 
-* When the server is started in Docker, run `docker exec -it tarpaulin-server /bin/bash` to enter bash
+* When the server is running in Docker, use `docker exec -it tarpaulin-server /bin/bash` to enter bash
     * run `mysql -u team58 -p tarpaulin` to access the database
