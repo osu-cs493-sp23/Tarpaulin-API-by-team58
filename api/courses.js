@@ -1,13 +1,15 @@
+//Required packages
 const { Router } = require("express")
 const router = Router()
 const { ValidationError } = require('sequelize')
 
+//course api helpers and constants
 const { generateHATEOASlinks, getOnly } = require("../lib/hateoasHelpers.js")
 const { validateAgainstSchema, containsAtLeastOneSchemaField } = require("../lib/dataValidation.js")
 const EXCLUDE_ATTRIBUTES_LIST = ["createdAt", "updatedAt"]
 const EXCLUDE_USER_ATTRIBUTES_LIST = EXCLUDE_ATTRIBUTES_LIST.concat(["password"])
 
-
+//sequelize models
 const { Assignment } = require("../models/assignment.js")
 const { User } = require("../models/user.js")
 const { Course, courseSchema, courseClientFields } = require("../models/course.js")
@@ -79,6 +81,7 @@ router.get("/", async function (req, res, next){
 router.get("/:courseId", async function (req, res, next){
 	const courseId = parseInt(req.params.courseId) || 0
 
+	//query the database
 	var courseResult = null
 	try {
 		courseResult = await Course.findByPk(courseId, {
@@ -109,12 +112,11 @@ router.get("/:courseId", async function (req, res, next){
  * GET /courses/{id}/assignments endpoint
  * 
  * Sends a response to the client with a list of assignments associated with a course given by {id}.
- * 
- * TODO: Test once progress has been made on the Assignment model
  */
 router.get("/:courseId/assignments", async function (req, res, next){
 	var courseId = parseInt(req.params.courseId) || 0
 
+	//query the database
 	var results = null
 	try {
 		results = await Assignment.findAll({
@@ -139,10 +141,15 @@ router.get("/:courseId/assignments", async function (req, res, next){
 })
 
 
-
+/**
+ * GET /courses/{id}/students endpoint
+ * 
+ * Sends a response to the client containing a list of all students enrolled in the specified course.
+ */
 router.get("/:courseId/students", async function (req, res, next){
 	const courseId = parseInt(req.params.courseId) || 0
 
+	//check first if the requested course exists
 	try {
 		if (!courseExistsInDb(courseId)){
 			next()
@@ -153,6 +160,7 @@ router.get("/:courseId/students", async function (req, res, next){
 		return
 	}
 
+	//query the database
 	var courseListResult = null
 	try {
 		courseListResult = await User.findAll({
@@ -171,6 +179,7 @@ router.get("/:courseId/students", async function (req, res, next){
 		return
 	}
 
+	//restructure the data from the database
 	courseList = []
 	courseListResult.forEach(student => {
 		courseList.push({
@@ -183,7 +192,6 @@ router.get("/:courseId/students", async function (req, res, next){
 		students: courseList
 	})
 })
-
 
 
 /**
@@ -222,8 +230,18 @@ router.post("/", async function (req, res, next){
 })
 
 
-
+/**
+ * POST /courses/{id}/students endpoint
+ * 
+ * Allows client to add and remove students from the course roster using:
+ *	- req.body.add (array of studentId) 
+ * 		and
+ * 	- req.body.remove (array of studentId)
+ * 
+ * If there are errors adding or removing any students, their ids will be sent back to the client
+ */
 router.post("/:courseId/students", async function (req, res, next){
+	//verify required request body fields are present
 	if (!(req.body && (req.body.add || req.body.remove))){
 		res.status(400).json({
 			error: "The request body was either not present or did not contain studentIds to add to or remove from the specified course."
@@ -233,6 +251,7 @@ router.post("/:courseId/students", async function (req, res, next){
 
 	const courseId = parseInt(req.params.courseId) || 0
 
+	//verify specified course exists and get its sequelize model
 	var course = null
 	try {
 		course = await Course.findByPk(courseId)
@@ -246,6 +265,7 @@ router.post("/:courseId/students", async function (req, res, next){
 		return
 	}
 
+	//remove users that exist in both the add and remove fields of the request body
 	var addArr = []
 	var removeArr = []
 	if (req.body.add && req.body.remove){
@@ -261,6 +281,7 @@ router.post("/:courseId/students", async function (req, res, next){
 		removeArr = req.body.remove
 	}
 
+	//add and remove users as requested
 	var response = {}
 	var couldNotAdd = []
 	var couldNotRemove = []
@@ -294,8 +315,13 @@ router.post("/:courseId/students", async function (req, res, next){
 })
 
 
-
+/**
+ * PATCH /courses/{id} endpoint
+ * 
+ * Allows user to change stored information about the specified course.
+ */
 router.patch("/:courseId", async function (req, res, next){
+	//verify request body is not empty
 	if (!containsAtLeastOneSchemaField(req.body, courseSchema)){
 		res.status(400).json({
 			error: "The request body was either not present or did not contain fields related to a course object."
@@ -305,6 +331,7 @@ router.patch("/:courseId", async function (req, res, next){
 	
 	const courseId = parseInt(req.params.courseId) || 0
 
+	//verify specified course exists and get its sequelize model
 	var match = null
 	try {
 		match = await Course.findByPk(courseId, {
@@ -327,6 +354,7 @@ router.patch("/:courseId", async function (req, res, next){
 		return
 	}
 
+	//if instructorId was provided in the request body, remove the old instructor and add the new instructor
 	var successfulPatch = false
 	if (req.body.instructorId){
 		try {
@@ -339,6 +367,7 @@ router.patch("/:courseId", async function (req, res, next){
 		successfulPatch = true
 	}
 
+	//update the rest of the provided fields if provided
 	var patchResult = null
 	try {
 		patchResult = await Course.update(req.body, {
@@ -358,6 +387,7 @@ router.patch("/:courseId", async function (req, res, next){
 		successfulPatch = true
 	}
 
+	//if the instructorId or another field are changed, send a 200 response
 	if (successfulPatch){
 		res.status(200).send()
 	} else {
@@ -366,10 +396,15 @@ router.patch("/:courseId", async function (req, res, next){
 })
 
 
-
+/**
+ * DELETE /courses/{id}
+ * 
+ * Removes the course entry from the database. Cascades to all child tables, namely `usercourses` and `assignments`
+ */
 router.delete("/:courseId", async function (req, res, next){
 	const courseId = parseInt(req.params.courseId) || 0
 
+	//query the database
 	var result = 0
 	try {
 		result = await Course.destroy({where: {id: courseId}})
@@ -391,7 +426,11 @@ module.exports = router
 
 
 //Helpers
-
+/**
+ * Restructures data directly from a sequelize query on the Course model that includes the instructor user of the course.
+ * @param {*} model the value returned from sequelize. If multiple values are returned, each must be passed to this function individually.
+ * @returns a JS object containing the response fields specified in the tarpaulin openAPI specification.
+ */
 function courseResponseFromSequelizeModel(model){
 	return {
 		...model.dataValues,
@@ -401,7 +440,11 @@ function courseResponseFromSequelizeModel(model){
 }
 
 
-
+/**
+ * Checks if the course with the specified courseId exists in the database.
+ * @param {*} courseId the id of the course to search for.
+ * @returns a boolean representing the existance of the specified course in the database.
+ */
 async function courseExistsInDb(courseId){
 	return !!await Course.findByPk(courseId)
 }
