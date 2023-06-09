@@ -54,11 +54,7 @@ router.get("/", async function (req, res, next){
 	//reformat json result to only include instructor id and course fields
 	resultsPage = []
 	result.rows.forEach((course) => {
-		resultsPage.push({
-			...course.dataValues,
-			users: undefined,
-			instructorId: course.users[0].id
-		})
+		resultsPage.push(courseResponseFromSequelizeModel(course))
 	})
 
 	//generate response with appropriate HATEOAS links
@@ -105,12 +101,7 @@ router.get("/:courseId", async function (req, res, next){
 		return
 	}
 
-	const course = courseResult.dataValues
-	res.status(200).json({
-		...course,
-		users: undefined,
-		instructorId: course.users[0].id
-	})
+	res.status(200).json(courseResponseFromSequelizeModel(courseResult))
 })
 
 
@@ -239,4 +230,36 @@ router.patch("/:courseId", async function (req, res, next){
 })
 
 
+
+router.delete("/:courseId", async function (req, res, next){
+	const courseId = parseInt(req.params.courseId) || 0
+
+	var result = 0
+	try {
+		result = await Course.destroy({where: {id: courseId}})
+	} catch (err){
+		next(err)
+		return
+	}
+
+	if (result <= 0){
+		next()
+		return
+	}
+
+	res.status(204).send()
+})
+
+
 module.exports = router
+
+
+//Helpers
+
+function courseResponseFromSequelizeModel(model){
+	return {
+		...model.dataValues,
+		users: undefined,
+		instructorId: model.dataValues.users[0].id
+	}
+}
