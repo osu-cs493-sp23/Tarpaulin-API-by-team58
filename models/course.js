@@ -48,7 +48,15 @@ Course.hasMany(Assignment, {
 Assignment.belongsTo(Course)
 
 //Define N:M relationship between courses and users
-const UserCourse = sequelize.define("usercourse", {}, {timestamps: false})
+const UserCourse = sequelize.define("usercourse", {}, {
+	timestamps: false,
+	indexes: [
+		{
+			unique: true,
+			fields: ["courseId", "userId"]
+		}
+	]
+})
 Course.belongsToMany(User, {
 	through: UserCourse,
 	as: "users",

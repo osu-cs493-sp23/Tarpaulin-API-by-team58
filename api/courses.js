@@ -3,7 +3,7 @@ const router = Router()
 const { ValidationError } = require('sequelize')
 
 const { generateHATEOASlinks, getOnly } = require("../lib/hateoasHelpers.js")
-const { validateAgainstSchema } = require("../lib/dataValidation.js")
+const { validateAgainstSchema, containsAtLeastOneSchemaField } = require("../lib/dataValidation.js")
 const EXCLUDE_ATTRIBUTES_LIST = ["createdAt", "updatedAt"]
 const EXCLUDE_USER_ATTRIBUTES_LIST = EXCLUDE_ATTRIBUTES_LIST.concat(["password"])
 
@@ -121,7 +121,7 @@ router.get("/:courseId/assignments", async function (req, res, next){
 			where: {
 				courseId: courseId
 			},
-			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST}
+			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST.concat("courseId")}
 		})
 	} catch (err){
 		next(err)
@@ -135,6 +135,52 @@ router.get("/:courseId/assignments", async function (req, res, next){
 
 	res.status(200).json({
 		assignments: results
+	})
+})
+
+
+
+router.get("/:courseId/students", async function (req, res, next){
+	const courseId = parseInt(req.params.courseId) || 0
+
+	try {
+		if (!courseExistsInDb(courseId)){
+			next()
+			return
+		}
+	} catch (err){
+		next(err)
+		return
+	}
+
+	var courseListResult = null
+	try {
+		courseListResult = await User.findAll({
+			where: {role: "student"},
+			attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST.concat("role")},
+			include: {
+				model: Course,
+				as: "courses",
+				where: {id: courseId},
+				through: {attributes: []},
+				attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST}
+			}
+		})
+	} catch (err){
+		next(err)
+		return
+	}
+
+	courseList = []
+	courseListResult.forEach(student => {
+		courseList.push({
+			...student.dataValues,
+			courses: undefined
+		})
+	})
+
+	res.status(200).json({
+		students: courseList
 	})
 })
 
@@ -177,7 +223,86 @@ router.post("/", async function (req, res, next){
 
 
 
+router.post("/:courseId/students", async function (req, res, next){
+	if (!(req.body && (req.body.add || req.body.remove))){
+		res.status(400).json({
+			error: "The request body was either not present or did not contain studentIds to add to or remove from the specified course."
+		})
+		return
+	}
+
+	const courseId = parseInt(req.params.courseId) || 0
+
+	var course = null
+	try {
+		course = await Course.findByPk(courseId)
+	} catch (err){
+		next(err)
+		return
+	}
+
+	if (!course){
+		next()
+		return
+	}
+
+	var addArr = []
+	var removeArr = []
+	if (req.body.add && req.body.remove){
+		addArr = req.body.add.filter(studentId => {
+			return !req.body.remove.includes(studentId)
+		})
+		removeArr = req.body.remove.filter(studentId => {
+			return !req.body.add.includes(studentId)
+		})
+	} else if (req.body.add){
+		addArr = req.body.add
+	} else {
+		removeArr = req.body.remove
+	}
+
+	var response = {}
+	var couldNotAdd = []
+	var couldNotRemove = []
+	if (addArr.length > 0){
+		addArr.forEach(async studentId => {
+			try {
+				await course.addUser(studentId)
+			} catch (err){
+				couldNotAdd.push(studentId)
+			}
+		})
+		if (couldNotAdd.length > 0){
+			response["not_added"] = couldNotAdd
+		}
+	}
+
+	if (removeArr.length > 0){
+		removeArr.forEach(async studentId => {
+			try {
+				await course.removeUser(studentId)
+			} catch (err){
+				couldNotRemove.push(studentId)
+			}
+		})
+		if (couldNotRemove.length > 0){
+			response["not_removed"] = couldNotRemove
+		}
+	}
+
+	res.status(201).json(response)
+})
+
+
+
 router.patch("/:courseId", async function (req, res, next){
+	if (!containsAtLeastOneSchemaField(req.body, courseSchema)){
+		res.status(400).json({
+			error: "The request body was either not present or did not contain fields related to a course object."
+		})
+		return
+	}
+	
 	const courseId = parseInt(req.params.courseId) || 0
 
 	var match = null
@@ -202,9 +327,16 @@ router.patch("/:courseId", async function (req, res, next){
 		return
 	}
 
+	var successfulPatch = false
 	if (req.body.instructorId){
-		await match.removeUser(match.dataValues.users[0].id)
-		await match.addUser(req.body.instructorId)
+		try {
+			await match.removeUser(match.dataValues.users[0].id)
+			await match.addUser(req.body.instructorId)
+		} catch (err){
+			next(err)
+			return
+		}
+		successfulPatch = true
 	}
 
 	var patchResult = null
@@ -223,6 +355,10 @@ router.patch("/:courseId", async function (req, res, next){
 	}
 
 	if (patchResult[0] > 0){
+		successfulPatch = true
+	}
+
+	if (successfulPatch){
 		res.status(200).send()
 	} else {
 		next()
@@ -262,4 +398,10 @@ function courseResponseFromSequelizeModel(model){
 		users: undefined,
 		instructorId: model.dataValues.users[0].id
 	}
+}
+
+
+
+async function courseExistsInDb(courseId){
+	return !!await Course.findByPk(courseId)
 }
