@@ -1,14 +1,16 @@
-const url = require("url")
 const { Router } = require("express")
 const router = Router()
 const { ValidationError } = require('sequelize')
 
 const { generateHATEOASlinks, getOnly } = require("../lib/hateoasHelpers.js")
+const { validateAgainstSchema } = require("../lib/dataValidation.js")
 const EXCLUDE_ATTRIBUTES_LIST = ["createdAt", "updatedAt"]
+const EXCLUDE_USER_ATTRIBUTES_LIST = EXCLUDE_ATTRIBUTES_LIST.concat(["password"])
 
 
 const { Assignment } = require("../models/assignment.js")
-const { Course, courseClientFields } = require("../models/course.js")
+const { User } = require("../models/user.js")
+const { Course, courseSchema, courseClientFields } = require("../models/course.js")
 
 
 
@@ -35,17 +37,34 @@ router.get("/", async function (req, res, next){
 			where: queryStringParams,
 			limit: coursesPerPage,
 			offset: offset,
-			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST}
+			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST},
+			include: {
+				model: User,
+				as: "users",
+				where: {role: "instructor"},
+				through: {attributes: []},
+				attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST}
+			}
 		})
 	} catch (err){
 		next(err)
 		return
 	}
 
+	//reformat json result to only include instructor id and course fields
+	resultsPage = []
+	result.rows.forEach((course) => {
+		resultsPage.push({
+			...course.dataValues,
+			users: undefined,
+			instructorId: course.users[0].id
+		})
+	})
+
 	//generate response with appropriate HATEOAS links
 	var lastPage = Math.ceil(result.count / coursesPerPage)
 	res.status(200).json({
-		courses: result.rows,
+		courses: resultsPage,
 		links: generateHATEOASlinks(
 			req.originalUrl.split("?")[0],
 			page,
@@ -67,7 +86,14 @@ router.get("/:courseId", async function (req, res, next){
 	var courseResult = null
 	try {
 		courseResult = await Course.findByPk(courseId, {
-			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST}
+			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST},
+			include: {
+				model: User,
+				as: "users",
+				where: {role: "instructor"},
+				through: {attributes: []},
+				attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST}
+			}
 		})
 	} catch (err){
 		next(err)
@@ -79,7 +105,12 @@ router.get("/:courseId", async function (req, res, next){
 		return
 	}
 
-	res.status(200).json(courseResult.dataValues)
+	const course = courseResult.dataValues
+	res.status(200).json({
+		...course,
+		users: undefined,
+		instructorId: course.users[0].id
+	})
 })
 
 
@@ -126,9 +157,9 @@ router.get("/:courseId/assignments", async function (req, res, next){
 router.post("/", async function (req, res, next){
 	//verify existence of required fields
 	var newCourse = req.body
-	if (!(newCourse && newCourse.subject && newCourse.number && newCourse.term)){
+	if (!validateAgainstSchema(newCourse, courseSchema)){
 		res.status(400).json({
-			error: "The request body was either not present or did not contain a valid Course object containing required fields: \"subject,\" \"number,\" and \"term.\""
+			error: "The request body was either not present or did not contain a valid Course object containing required fields: \"subject,\" \"number,\" \"term,\" and \"instructorId.\""
 		})
 		return
 	}
@@ -137,6 +168,7 @@ router.post("/", async function (req, res, next){
 	var course = {}
 	try {
 		course = await Course.create(newCourse, courseClientFields)
+		await course.addUser(newCourse.instructorId)
 	} catch (err){
 		//if a validation error is thrown after verifying the existence of required fields, it is due to a unique index constraint on "course"."subject", ."number", and ."term" defined in ../lib/course.js.
 		if (err instanceof ValidationError){
@@ -156,6 +188,33 @@ router.post("/", async function (req, res, next){
 
 router.patch("/:courseId", async function (req, res, next){
 	const courseId = parseInt(req.params.courseId) || 0
+
+	var match = null
+	try {
+		match = await Course.findByPk(courseId, {
+			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST},
+			include: {
+				model: User,
+				as: "users",
+				where: {role: "instructor"},
+				through: {attributes: []},
+				attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST}
+			}
+		})
+	} catch (err){
+		next(err)
+		return
+	}
+
+	if (!match){
+		next()
+		return
+	}
+
+	if (req.body.instructorId){
+		await match.removeUser(match.dataValues.users[0].id)
+		await match.addUser(req.body.instructorId)
+	}
 
 	var patchResult = null
 	try {

@@ -2,6 +2,7 @@ const { DataTypes } = require("sequelize")
 const sequelize = require("../lib/sequelize.js")
 
 const { Assignment } = require("./assignment.js")
+const { User } = require("./user.js")
 
 const courseFields = {
 	subject: {
@@ -35,6 +36,10 @@ const Course = sequelize.define("course", courseFields, {
 	]
 })
 
+exports.Course = Course
+exports.courseSchema = courseFields
+exports.courseClientFields = Object.keys(courseFields)
+
 Course.hasMany(Assignment, {
 	onDelete: "CASCADE",
 	onUpdate: "CASCADE",
@@ -42,6 +47,21 @@ Course.hasMany(Assignment, {
 })
 Assignment.belongsTo(Course)
 
-exports.Course = Course
-exports.courseClientFields = Object.keys(courseFields)
-exports.courseClientFields.push("instructorId")
+//Define N:M relationship between courses and users
+const UserCourse = sequelize.define("usercourse", {}, {timestamps: false})
+Course.belongsToMany(User, {
+	through: UserCourse,
+	as: "users",
+	foreignKey: "courseId",
+	onDelete: "CASCADE",
+	onUpdate: "CASCADE",
+})
+User.belongsToMany(Course, {
+	through: UserCourse,
+	as: "courses",
+	foreignKey: "userId",
+	onDelete: "CASCADE",
+	onUpdate: "CASCADE",
+})
+exports.courseSchema.instructorId = {type: DataTypes.STRING, allowNull: false, unique: false}
+// exports.courseClientFields.push("instructorId")
