@@ -1,4 +1,5 @@
 //Required packages
+const { Readable } = require("node:stream")
 const { Router } = require("express")
 const router = Router()
 const { ValidationError } = require('sequelize')
@@ -6,6 +7,7 @@ const { ValidationError } = require('sequelize')
 //course api helpers and constants
 const { generateHATEOASlinks, getOnly } = require("../lib/hateoasHelpers.js")
 const { validateAgainstSchema, containsAtLeastOneSchemaField } = require("../lib/dataValidation.js")
+const { generateRosterCSV } = require("../lib/csv.js")
 const EXCLUDE_ATTRIBUTES_LIST = ["createdAt", "updatedAt"]
 const EXCLUDE_USER_ATTRIBUTES_LIST = EXCLUDE_ATTRIBUTES_LIST.concat(["password"])
 
@@ -149,7 +151,7 @@ router.get("/:courseId/assignments", async function (req, res, next){
 router.get("/:courseId/students", async function (req, res, next){
 	const courseId = parseInt(req.params.courseId) || 0
 
-	//check first if the requested course exists
+	/* //check first if the requested course exists
 	try {
 		if (!courseExistsInDb(courseId)){
 			next()
@@ -186,11 +188,52 @@ router.get("/:courseId/students", async function (req, res, next){
 			...student.dataValues,
 			courses: undefined
 		})
-	})
+	}) */
+
+	const courseRosterObj = await getCourseStudentsList(courseId)
+
+	if (courseRosterObj.status !== 200){
+		var errStr = undefined
+		if (courseRosterObj.status !== 404){
+			errStr = "server error"
+		}
+		next(errStr)
+		return
+	}
 
 	res.status(200).json({
-		students: courseList
+		students: courseRosterObj.data
 	})
+})
+
+
+/**
+ * GET /courses/{id}/roster
+ * 
+ * Generates and sends a csv containing the list of students registered for the specified course.
+ */
+router.get("/:courseId/roster", async function (req, res, next){
+	const courseId = parseInt(req.params.courseId) || 0
+
+	const courseRosterObj = await getCourseStudentsList(courseId)
+
+	if (courseRosterObj.status !== 200){
+		var errStr = undefined
+		if (courseRosterObj.status !== 404){
+			errStr = "server error"
+		}
+		next(errStr)
+		return
+	}
+
+	var csv = null
+	try {
+		csv = await generateRosterCSV(courseRosterObj.data)
+	} catch (err){
+		next(err)
+	}
+	
+	Readable.from(csv).pipe(res.status(200).contentType("text/csv"))
 })
 
 
@@ -447,4 +490,65 @@ function courseResponseFromSequelizeModel(model){
  */
 async function courseExistsInDb(courseId){
 	return !!await Course.findByPk(courseId)
+}
+
+
+
+async function getCourseStudentsList(courseId){
+	var rosterObj = {
+		data: [],
+		status: 200
+	}
+	
+	//check first if the requested course exists
+	try {
+		if (!courseExistsInDb(courseId)){
+			// next()
+			rosterObj.status = 404
+			return rosterObj
+		}
+	} catch (err){
+		// next(err)
+		rosterObj.status = 500
+		return rosterObj
+	}
+
+	//query the database
+	var courseListResult = null
+	try {
+		courseListResult = await User.findAll({
+			where: {role: "student"},
+			attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST.concat("role")},
+			include: {
+				model: Course,
+				as: "courses",
+				where: {id: courseId},
+				through: {attributes: []},
+				attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST}
+			}
+		})
+	} catch (err){
+		// next(err)
+		rosterObj.status = 500
+		return rosterObj
+	}
+
+	//restructure the data from the database into rosterObj.data
+	/* courseList = []
+	courseListResult.forEach(student => {
+		courseList.push({
+			...student.dataValues,
+			courses: undefined
+		})
+	}) */
+	courseListResult.forEach(student => {
+		rosterObj.data.push({
+			...student.dataValues,
+			courses: undefined
+		})
+	})
+	rosterObj.status = 200
+
+	// return courseList
+	return rosterObj
 }
