@@ -1,12 +1,10 @@
 const { DataTypes } = require("sequelize")
 const sequelize = require("../lib/sequelize.js")
 
-const { Course } = require("./course.js")
-
 const bcrypt = require("bcryptjs")
 
 const User = sequelize.define('user',{
-	id: {type: DataTypes.INTEGER, allowNull: false, primaryKey: true},
+	// id: {type: DataTypes.INTEGER, allowNull: false, primaryKey: true},
 	name: {type: DataTypes.STRING, allowNull: false},
 	email: {type: DataTypes.STRING, allowNull: false},
 	password: {

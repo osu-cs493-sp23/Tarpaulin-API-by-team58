@@ -3,6 +3,7 @@ require('dotenv').config()
 const express = require('express')
 const morgan = require('morgan')
 
+const { limitRate, connectToRedisServer } = require("./lib/rateLimiting.js")
 const api = require('./api')
 const sequelize = require('./lib/sequelize')
 
@@ -14,6 +15,8 @@ const port = process.env.PORT || 8000
  */
 app.use(morgan('dev'))
 app.use(express.json())
+
+app.use(limitRate)
 
 /*
  * All routes for the API are written in modules in the api/ directory.  The
@@ -45,8 +48,9 @@ app.use('*', function (err, req, res, next) {
  * Start the API server listening for requests after establishing a connection
  * to the MySQL server.
  */
-sequelize.sync().then(function () {
-    app.listen(port, function() {
+sequelize.sync().then(async function () {
+    await connectToRedisServer()
+	app.listen(port, function() {
       console.log("== Server is running on port", port)
     })
   })
