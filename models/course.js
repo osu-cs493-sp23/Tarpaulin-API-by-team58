@@ -72,4 +72,3 @@ User.belongsToMany(Course, {
 	onUpdate: "CASCADE",
 })
 exports.courseSchema.instructorId = {type: DataTypes.INTEGER, allowNull: false, unique: false}
-// exports.courseClientFields.push("instructorId")

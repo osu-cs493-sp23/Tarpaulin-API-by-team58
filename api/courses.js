@@ -42,13 +42,7 @@ router.get("/", async function (req, res, next){
 			limit: coursesPerPage,
 			offset: offset,
 			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST},
-			include: {
-				model: User,
-				as: "users",
-				where: {role: "instructor"},
-				through: {attributes: []},
-				attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST}
-			}
+			include: includeInstructorInCourseResultOptions()
 		})
 	} catch (err){
 		next(err)
@@ -88,13 +82,7 @@ router.get("/:courseId", async function (req, res, next){
 	try {
 		courseResult = await Course.findByPk(courseId, {
 			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST},
-			include: {
-				model: User,
-				as: "users",
-				where: {role: "instructor"},
-				through: {attributes: []},
-				attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST}
-			}
+			include: includeInstructorInCourseResultOptions()
 		})
 	} catch (err){
 		next(err)
@@ -156,13 +144,7 @@ router.get("/:courseId/students", requireAuthentication, async function (req, re
 	try {
 		course = await Course.findByPk(courseId, {
 			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST},
-			include: {
-				model: User,
-				as: "users",
-				where: {role: "instructor"},
-				through: {attributes: []},
-				attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST}
-			}
+			include: includeInstructorInCourseResultOptions()
 		})
 	} catch (err){
 		next(err)
@@ -174,7 +156,6 @@ router.get("/:courseId/students", requireAuthentication, async function (req, re
 		return
 	}
 
-	console.log(`User role: ${req.user.role}; User Id: (${typeof req.user.id}) ${req.user.id}; Course instructor: (${typeof course.dataValues.users[0].id}) ${course.dataValues.users[0].id}`)
 	if (!(req.user.role === "admin" || (req.user.role === "instructor" && req.user.id === course.dataValues.users[0].id))){
 		res.status(403).json({
 			error: "Unauthorized access to specified resource."
@@ -212,13 +193,7 @@ router.get("/:courseId/roster", requireAuthentication, async function (req, res,
 	try {
 		course = await Course.findByPk(courseId, {
 			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST},
-			include: {
-				model: User,
-				as: "users",
-				where: {role: "instructor"},
-				through: {attributes: []},
-				attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST}
-			}
+			include: includeInstructorInCourseResultOptions()
 		})
 	} catch (err){
 		next(err)
@@ -230,7 +205,6 @@ router.get("/:courseId/roster", requireAuthentication, async function (req, res,
 		return
 	}
 
-	console.log(`User role: ${req.user.role}; User Id: (${typeof req.user.id}) ${req.user.id}; Course instructor: (${typeof course.dataValues.users[0].id}) ${course.dataValues.users[0].id}`)
 	if (!(req.user.role === "admin" || (req.user.role === "instructor" && req.user.id === course.dataValues.users[0].id))){
 		res.status(403).json({
 			error: "Unauthorized access to specified resource."
@@ -256,6 +230,7 @@ router.get("/:courseId/roster", requireAuthentication, async function (req, res,
 		next(err)
 	}
 	
+	//convert csv buffer to stream and send to user
 	Readable.from(csv).pipe(res.status(200).contentType("text/csv"))
 })
 
@@ -329,13 +304,7 @@ router.post("/:courseId/students", requireAuthentication, async function (req, r
 	try {
 		course = await Course.findByPk(courseId, {
 			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST},
-			include: {
-				model: User,
-				as: "users",
-				where: {role: "instructor"},
-				through: {attributes: []},
-				attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST}
-			}
+			include: includeInstructorInCourseResultOptions()
 		})
 	} catch (err){
 		next(err)
@@ -347,7 +316,6 @@ router.post("/:courseId/students", requireAuthentication, async function (req, r
 		return
 	}
 
-	console.log(`User role: ${req.user.role}; User Id: (${typeof req.user.id}) ${req.user.id}; Course instructor: (${typeof course.dataValues.users[0].id}) ${course.dataValues.users[0].id}`)
 	if (!(req.user.role === "admin" || (req.user.role === "instructor" && req.user.id === course.dataValues.users[0].id))){
 		res.status(403).json({
 			error: "Unauthorized access to specified resource."
@@ -426,13 +394,7 @@ router.patch("/:courseId", requireAuthentication, async function (req, res, next
 	try {
 		match = await Course.findByPk(courseId, {
 			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST},
-			include: {
-				model: User,
-				as: "users",
-				where: {role: "instructor"},
-				through: {attributes: []},
-				attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST}
-			}
+			include: includeInstructorInCourseResultOptions()
 		})
 	} catch (err){
 		next(err)
@@ -444,7 +406,6 @@ router.patch("/:courseId", requireAuthentication, async function (req, res, next
 		return
 	}
 
-	console.log(`User role: ${req.user.role}; User Id: (${typeof req.user.id}) ${req.user.id}; Course instructor: (${typeof match.dataValues.users[0].id}) ${match.dataValues.users[0].id}`)
 	if (!(req.user.role === "admin" || (req.user.role === "instructor" && req.user.id === match.dataValues.users[0].id))){
 		res.status(403).json({
 			error: "Unauthorized access to specified resource."
@@ -565,12 +526,10 @@ async function getCourseStudentsList(courseId){
 	//check first if the requested course exists
 	try {
 		if (!courseExistsInDb(courseId)){
-			// next()
 			rosterObj.status = 404
 			return rosterObj
 		}
 	} catch (err){
-		// next(err)
 		rosterObj.status = 500
 		return rosterObj
 	}
@@ -590,19 +549,11 @@ async function getCourseStudentsList(courseId){
 			}
 		})
 	} catch (err){
-		// next(err)
 		rosterObj.status = 500
 		return rosterObj
 	}
 
 	//restructure the data from the database into rosterObj.data
-	/* courseList = []
-	courseListResult.forEach(student => {
-		courseList.push({
-			...student.dataValues,
-			courses: undefined
-		})
-	}) */
 	courseListResult.forEach(student => {
 		rosterObj.data.push({
 			...student.dataValues,
@@ -613,4 +564,20 @@ async function getCourseStudentsList(courseId){
 
 	// return courseList
 	return rosterObj
+}
+
+
+
+function includeInstructorInCourseResultOptions(exclude){
+	var xcldUsrAttrLst = EXCLUDE_USER_ATTRIBUTES_LIST
+	if (exclude)
+		xcldUsrAttrLst.concat(exclude)
+
+	return {
+		model: User,
+		as: "users",
+		where: {role: "instructor"},
+		through: {attributes: []},
+		attributes: {exclude: xcldUsrAttrLst}
+	}
 }
