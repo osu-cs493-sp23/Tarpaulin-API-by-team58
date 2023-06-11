@@ -5,7 +5,7 @@ const router = Router()
 const { ValidationError } = require('sequelize')
 
 //course api helpers and constants
-const { generateHATEOASlinks, getOnly } = require("../lib/hateoasHelpers.js")
+const { generateHATEOASlinks, getOnly, requireAuthentication } = require("../lib/hateoasHelpers.js")
 const { validateAgainstSchema, containsAtLeastOneSchemaField } = require("../lib/dataValidation.js")
 const { generateRosterCSV } = require("../lib/csv.js")
 const EXCLUDE_ATTRIBUTES_LIST = ["createdAt", "updatedAt"]
@@ -148,32 +148,20 @@ router.get("/:courseId/assignments", async function (req, res, next){
  * 
  * Sends a response to the client containing a list of all students enrolled in the specified course.
  */
-router.get("/:courseId/students", async function (req, res, next){
+router.get("/:courseId/students", requireAuthentication, async function (req, res, next){
 	const courseId = parseInt(req.params.courseId) || 0
 
-	/* //check first if the requested course exists
+	//verify specified course exists and get its sequelize model
+	var course = null
 	try {
-		if (!courseExistsInDb(courseId)){
-			next()
-			return
-		}
-	} catch (err){
-		next(err)
-		return
-	}
-
-	//query the database
-	var courseListResult = null
-	try {
-		courseListResult = await User.findAll({
-			where: {role: "student"},
-			attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST.concat("role")},
+		course = await Course.findByPk(courseId, {
+			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST},
 			include: {
-				model: Course,
-				as: "courses",
-				where: {id: courseId},
+				model: User,
+				as: "users",
+				where: {role: "instructor"},
 				through: {attributes: []},
-				attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST}
+				attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST}
 			}
 		})
 	} catch (err){
@@ -181,14 +169,18 @@ router.get("/:courseId/students", async function (req, res, next){
 		return
 	}
 
-	//restructure the data from the database
-	courseList = []
-	courseListResult.forEach(student => {
-		courseList.push({
-			...student.dataValues,
-			courses: undefined
+	if (!course){
+		next()
+		return
+	}
+
+	console.log(`User role: ${req.user.role}; User Id: (${typeof req.user.id}) ${req.user.id}; Course instructor: (${typeof course.dataValues.users[0].id}) ${course.dataValues.users[0].id}`)
+	if (!(req.user.role === "admin" || (req.user.role === "instructor" && req.user.id === course.dataValues.users[0].id))){
+		res.status(403).json({
+			error: "Unauthorized access to specified resource."
 		})
-	}) */
+		return
+	}
 
 	const courseRosterObj = await getCourseStudentsList(courseId)
 
@@ -212,8 +204,39 @@ router.get("/:courseId/students", async function (req, res, next){
  * 
  * Generates and sends a csv containing the list of students registered for the specified course.
  */
-router.get("/:courseId/roster", async function (req, res, next){
+router.get("/:courseId/roster", requireAuthentication, async function (req, res, next){
 	const courseId = parseInt(req.params.courseId) || 0
+
+	//verify specified course exists and get its sequelize model
+	var course = null
+	try {
+		course = await Course.findByPk(courseId, {
+			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST},
+			include: {
+				model: User,
+				as: "users",
+				where: {role: "instructor"},
+				through: {attributes: []},
+				attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST}
+			}
+		})
+	} catch (err){
+		next(err)
+		return
+	}
+
+	if (!course){
+		next()
+		return
+	}
+
+	console.log(`User role: ${req.user.role}; User Id: (${typeof req.user.id}) ${req.user.id}; Course instructor: (${typeof course.dataValues.users[0].id}) ${course.dataValues.users[0].id}`)
+	if (!(req.user.role === "admin" || (req.user.role === "instructor" && req.user.id === course.dataValues.users[0].id))){
+		res.status(403).json({
+			error: "Unauthorized access to specified resource."
+		})
+		return
+	}
 
 	const courseRosterObj = await getCourseStudentsList(courseId)
 
@@ -242,7 +265,14 @@ router.get("/:courseId/roster", async function (req, res, next){
  * 
  * Adds a new course to the database as long as it does not already exist.
  */
-router.post("/", async function (req, res, next){
+router.post("/", requireAuthentication, async function (req, res, next){
+	if (!(req.user.role === "admin")){
+		res.status(403).json({
+			error: "Unauthorized access to specified resource."
+		})
+		return
+	}
+	
 	//verify existence of required fields
 	var newCourse = req.body
 	if (!validateAgainstSchema(newCourse, courseSchema)){
@@ -283,7 +313,7 @@ router.post("/", async function (req, res, next){
  * 
  * If there are errors adding or removing any students, their ids will be sent back to the client
  */
-router.post("/:courseId/students", async function (req, res, next){
+router.post("/:courseId/students", requireAuthentication, async function (req, res, next){
 	//verify required request body fields are present
 	if (!(req.body && (req.body.add || req.body.remove))){
 		res.status(400).json({
@@ -297,7 +327,16 @@ router.post("/:courseId/students", async function (req, res, next){
 	//verify specified course exists and get its sequelize model
 	var course = null
 	try {
-		course = await Course.findByPk(courseId)
+		course = await Course.findByPk(courseId, {
+			attributes: {exclude: EXCLUDE_ATTRIBUTES_LIST},
+			include: {
+				model: User,
+				as: "users",
+				where: {role: "instructor"},
+				through: {attributes: []},
+				attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST}
+			}
+		})
 	} catch (err){
 		next(err)
 		return
@@ -305,6 +344,14 @@ router.post("/:courseId/students", async function (req, res, next){
 
 	if (!course){
 		next()
+		return
+	}
+
+	console.log(`User role: ${req.user.role}; User Id: (${typeof req.user.id}) ${req.user.id}; Course instructor: (${typeof course.dataValues.users[0].id}) ${course.dataValues.users[0].id}`)
+	if (!(req.user.role === "admin" || (req.user.role === "instructor" && req.user.id === course.dataValues.users[0].id))){
+		res.status(403).json({
+			error: "Unauthorized access to specified resource."
+		})
 		return
 	}
 
@@ -363,7 +410,7 @@ router.post("/:courseId/students", async function (req, res, next){
  * 
  * Allows user to change stored information about the specified course.
  */
-router.patch("/:courseId", async function (req, res, next){
+router.patch("/:courseId", requireAuthentication, async function (req, res, next){
 	//verify request body is not empty
 	if (!containsAtLeastOneSchemaField(req.body, courseSchema)){
 		res.status(400).json({
@@ -394,6 +441,14 @@ router.patch("/:courseId", async function (req, res, next){
 
 	if (!match){
 		next()
+		return
+	}
+
+	console.log(`User role: ${req.user.role}; User Id: (${typeof req.user.id}) ${req.user.id}; Course instructor: (${typeof match.dataValues.users[0].id}) ${match.dataValues.users[0].id}`)
+	if (!(req.user.role === "admin" || (req.user.role === "instructor" && req.user.id === match.dataValues.users[0].id))){
+		res.status(403).json({
+			error: "Unauthorized access to specified resource."
+		})
 		return
 	}
 
@@ -444,8 +499,15 @@ router.patch("/:courseId", async function (req, res, next){
  * 
  * Removes the course entry from the database. Cascades to all child tables, namely `usercourses` and `assignments`
  */
-router.delete("/:courseId", async function (req, res, next){
+router.delete("/:courseId", requireAuthentication, async function (req, res, next){
 	const courseId = parseInt(req.params.courseId) || 0
+
+	if (!(req.user.role === "admin")){
+		res.status(403).json({
+			error: "Unauthorized access to specified resource."
+		})
+		return
+	}
 
 	//query the database
 	var result = 0
@@ -518,7 +580,7 @@ async function getCourseStudentsList(courseId){
 	try {
 		courseListResult = await User.findAll({
 			where: {role: "student"},
-			attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST.concat("role")},
+			attributes: {exclude: EXCLUDE_USER_ATTRIBUTES_LIST.concat(["role", "admin"])},
 			include: {
 				model: Course,
 				as: "courses",
