@@ -1,5 +1,7 @@
 # Tarpaulin API
 
+https://docs.google.com/document/d/1A-i0wsm3nTcKpkzOjcajy1OpDV1ZXcUPYJeo1vJ9tjQ/edit
+
 ## Setup
 * run `npm i` to install dependencies
 * run `npm run dev` to develop
