@@ -68,7 +68,7 @@ router.post('/login', async function (req, res, next) {
 
 // based on id to get all information about user
 router.get('/:id', requireAuthentication, async function (req, res, next) {
-	if (req.user === Number(req.params.id) || isAdmin(req)) {
+	if (req.user.id === Number(req.params.id) || isAdmin(req)) {
 		try {
 			const user = await User.findByPk(req.params.id)
 			if (user) {
@@ -85,7 +85,7 @@ router.get('/:id', requireAuthentication, async function (req, res, next) {
 		}
 	} else {
 		res.status(403).send({
-			error: "Unauthorized to access the specific resource"
+			error: "Unauthorized to access with current credential"
 		})
 	}
 })
