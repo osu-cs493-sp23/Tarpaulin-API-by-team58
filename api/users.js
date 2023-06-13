@@ -39,29 +39,41 @@ router.post('/', optionalAuthentication, async function (req, res, next){
 
 // login the user
 router.post('/login', async function (req, res, next) {
-	if (req.body && req.body.id && req.body.password ) {
+	// if (req.body && req.body.id && req.body.password ) {
+	if (req.body && req.body.email && req.body.password){
 		try {
-			authenticated = await User.findByPk(req.body.id)
-			authenticated = await bcrypt.compare(req.body.password, authenticated.password)
+			// authenticated = await User.findByPk(req.body.id)
+			var userData = await User.findOne({
+				where: {email: req.body.email}
+			})
+
+			if (!userData){
+				res.status(404).json({
+					error: `No user with email: ${req.body.email}`
+				})
+				return
+			}
+
+			var authenticated = await bcrypt.compare(req.body.password, userData.password)
 		
 			if (authenticated) {
-			//find out this user
-			const userData = await User.findByPk(req.body.id)
-			const token = generateAuthToken(userData)
-			res.status(200).send({
-				token: token
-			})
-		}else{
-			res.status(401).send({
+				//find out this user
+				// const userData = await User.findByPk(req.body.id)
+				const token = generateAuthToken(userData)
+				res.status(200).send({
+					token: token
+				})
+			}else{
+				res.status(401).send({
 				error: "invalid authentication credential"
-			})
-		}
+				})
+			}
 		} catch(e) {
 		next(e)
 		}
 	} else {
 		res.status(400).send({
-			err: "request body requires `id` and `password`."
+			err: "request body requires `email` and `password`."
 		})
 	}
 })
