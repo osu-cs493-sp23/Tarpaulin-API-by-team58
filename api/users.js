@@ -6,14 +6,14 @@ const bcrypt = require("bcryptjs")
 const {Assignment} = require('../models/assignment')
 const {Course} = require('../models/course')
 const {User, UserClientFields} = require('../models/user')
-const {generateAuthToken, requireAuthentication, isAdmin} = require('../lib/hateoasHelpers')
+const {generateAuthToken, requireAuthentication, isAdmin, optionalAuthentication} = require('../lib/hateoasHelpers')
 
 
 const router = Router()
 
 // create user
-router.post('/', async function (req, res, next){
-	if (!(req.user.role === "admin") && req.body.admin){
+router.post('/', optionalAuthentication, async function (req, res, next){
+	if (req.user && !(req.user.role === "admin") && req.body.role === "admin"){
 		res.status(403).json({
 			error: "Invalid role to create Admin"
 		})
