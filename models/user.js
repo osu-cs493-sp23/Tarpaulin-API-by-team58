@@ -4,7 +4,6 @@ const sequelize = require("../lib/sequelize.js")
 const bcrypt = require("bcryptjs")
 
 const User = sequelize.define('user',{
-	// id: {type: DataTypes.INTEGER, allowNull: false, primaryKey: true},
 	name: {type: DataTypes.STRING, allowNull: false},
 	email: {type: DataTypes.STRING, allowNull: false, unique: true},
 	password: {
@@ -16,10 +15,7 @@ const User = sequelize.define('user',{
 		},
 		allowNull: false
 	},
-	role: {type: DataTypes.STRING, allowNull: false},
-	//admin: {type: DataTypes.BOOLEAN, allowNull: true, defaultValue: false},
-	// teacher: {type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false},
-	// student: {type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true}
+	role: {type: DataTypes.STRING, allowNull: false}
 })
 
 exports.User = User
@@ -28,6 +24,5 @@ exports.UserClientFields = [
 	'name',
 	'email',
 	'password',
-	'role', //student or teacher
-	'admin'
+	'role' //student, teacher, or admin
 ]

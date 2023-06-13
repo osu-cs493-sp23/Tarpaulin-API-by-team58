@@ -39,10 +39,8 @@ router.post('/', optionalAuthentication, async function (req, res, next){
 
 // login the user
 router.post('/login', async function (req, res, next) {
-	// if (req.body && req.body.id && req.body.password ) {
 	if (req.body && req.body.email && req.body.password){
 		try {
-			// authenticated = await User.findByPk(req.body.id)
 			var userData = await User.findOne({
 				where: {email: req.body.email}
 			})
@@ -58,7 +56,6 @@ router.post('/login', async function (req, res, next) {
 		
 			if (authenticated) {
 				//find out this user
-				// const userData = await User.findByPk(req.body.id)
 				const token = generateAuthToken(userData)
 				res.status(200).send({
 					token: token
