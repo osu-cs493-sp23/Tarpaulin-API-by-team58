@@ -5,25 +5,33 @@ const bcrypt = require("bcryptjs")
 
 const {Assignment} = require('../models/assignment')
 const {Course} = require('../models/course')
-const {User, UserClientFields} = require('../models/user')
-const {generateAuthToken, requireAuthentication, isAdmin, optionalAuthentication} = require('../lib/hateoasHelpers')
+const {User, userSchema, UserClientFields} = require('../models/user')
+const {generateAuthToken, requireAuthentication, isAdmin, optionalAuthentication} = require('../lib/auth.js')
+const {validateAgainstSchema} = require("../lib/dataValidation")
 
 
 const router = Router()
 
 // create user
 router.post('/', optionalAuthentication, async function (req, res, next){
-	if (req.user && !(req.user.role === "admin") && req.body.role === "admin"){
+	if (!isAdmin(req) && (req.body.role === "admin" || req.body.role === "instructor")){
 		res.status(403).json({
-			error: "Invalid role to create Admin"
+			error: "Invalid role to create new user with specified role."
 		})
 		return
 	}
+
+	if (!validateAgainstSchema(req.body, userSchema)){
+		res.status(400).json({
+			error: "The request body was either not present or did not contain a valid Course object containing required fields: \"name,\" \"email,\" \"password,\" and \"role.\""
+		})
+		return
+	}
+
 	try{
 		const user = await User.create(req.body,UserClientFields)
-		const hash = await bcrypt.hashSync(user.password, 8)
-		user.password = hash
-		console.log(" -- userToInsert:", user)
+		/* const hash = await bcrypt.hashSync(user.password, 8)
+		user.password = hash */
 
 		res.status(201).send({
 			id: user.id
@@ -62,7 +70,7 @@ router.post('/login', async function (req, res, next) {
 				})
 			}else{
 				res.status(401).send({
-				error: "invalid authentication credential"
+					error: "invalid authentication credential"
 				})
 			}
 		} catch(e) {

@@ -5,7 +5,8 @@ const router = Router()
 const { ValidationError } = require('sequelize')
 
 //course api helpers and constants
-const { generateHATEOASlinks, getOnly, requireAuthentication } = require("../lib/hateoasHelpers.js")
+const { generateHATEOASlinks, getOnly } = require("../lib/hateoasHelpers.js")
+const { requireAuthentication } = require("../lib/auth.js")
 const { validateAgainstSchema, containsAtLeastOneSchemaField } = require("../lib/dataValidation.js")
 const { generateRosterCSV } = require("../lib/csv.js")
 const EXCLUDE_ATTRIBUTES_LIST = ["createdAt", "updatedAt"]
@@ -259,7 +260,13 @@ router.post("/", requireAuthentication, async function (req, res, next){
 
 	var instructor = null
 	try {
-		instructor = await User.findByPk(newCourse.instructorId)
+		// instructor = await User.findByPk(newCourse.instructorId)
+		instructor = await User.findOne({
+			where: {
+				id: newCourse.instructorId,
+				role: "instructor"
+			}
+		})
 	} catch (err){
 		next(err)
 	}
