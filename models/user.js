@@ -17,7 +17,7 @@ const User = sequelize.define('user',{
 		allowNull: false
 	},
 	role: {type: DataTypes.STRING, allowNull: false},
-	admin: {type: DataTypes.BOOLEAN, allowNull: true, defaultValue: false},
+	//admin: {type: DataTypes.BOOLEAN, allowNull: true, defaultValue: false},
 	// teacher: {type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false},
 	// student: {type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true}
 })

@@ -13,7 +13,7 @@ const router = Router()
 
 // create user
 router.post('/', async function (req, res, next){
-	if (!isAdmin(req) && req.body.admin){
+	if (!(req.user.role === "admin") && req.body.admin){
 		res.status(403).json({
 			error: "Invalid role to create Admin"
 		})
@@ -68,7 +68,7 @@ router.post('/login', async function (req, res, next) {
 
 // based on id to get all information about user
 router.get('/:id', requireAuthentication, async function (req, res, next) {
-	if (req.user.id === Number(req.params.id) || isAdmin(req)) {
+	if (req.user.id === Number(req.params.id) || (req.user.role === "admin")) {
 		try {
 			const user = await User.findByPk(req.params.id)
 			if (user) {

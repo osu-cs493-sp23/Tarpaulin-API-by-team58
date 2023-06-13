@@ -89,6 +89,10 @@ router.delete('/:id', async function(req, res, next){
     }
 })
 
+// upload
+const upload = multer({
+    
+})
 
 /*
 Returns the list of all Submissions.
