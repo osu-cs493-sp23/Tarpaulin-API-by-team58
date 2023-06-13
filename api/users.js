@@ -23,22 +23,20 @@ router.post('/', optionalAuthentication, async function (req, res, next){
 
 	if (!validateAgainstSchema(req.body, userSchema)){
 		res.status(400).json({
-			error: "The request body was either not present or did not contain a valid Course object containing required fields: \"name,\" \"email,\" \"password,\" and \"role.\""
+			error: "The request body was either not present or did not contain a valid User object containing required fields: \"name,\" \"email,\" \"password,\" and \"role.\""
 		})
 		return
 	}
 
 	try{
 		const user = await User.create(req.body,UserClientFields)
-		/* const hash = await bcrypt.hashSync(user.password, 8)
-		user.password = hash */
 
 		res.status(201).send({
 			id: user.id
 		})
 	} catch (e) {
 		if (e instanceof ValidationError) {
-			res.status(400).send({ error: e.message})
+			res.status(400).send({ error: `User already exists with email: ${req.body.email}.`})
 		} else {
 			next(e)
 		}
@@ -54,8 +52,10 @@ router.post('/login', async function (req, res, next) {
 			})
 
 			if (!userData){
-				res.status(404).json({
-					error: `No user with email: ${req.body.email}`
+				/* Best practice (and the api spec) dictates a 401 is sent if 
+				the user does not exist or has invalid credentials */
+				res.status(401).send({
+					error: "invalid authentication credential"
 				})
 				return
 			}
@@ -78,18 +78,16 @@ router.post('/login', async function (req, res, next) {
 		}
 	} else {
 		res.status(400).send({
-			err: "request body requires `email` and `password`."
+			error: "request body requires `email` and `password`."
 		})
 	}
 })
 
 // based on id to get all information about user
 router.get('/:id', requireAuthentication, async function (req, res, next) {
-	// if (req.user.id === Number(req.params.id) || (req.user.role === "admin")) {
 	const userId = parseInt(req.params.id)
 	if (req.user.id === userId || isAdmin(req)){
 		try {
-			// const user = await User.findByPk(req.params.id)
 			const user = await User.findByPk(userId, {
 				attributes: {exclude: ["createdAt", "updatedAt", "password"]},
 				include: {
