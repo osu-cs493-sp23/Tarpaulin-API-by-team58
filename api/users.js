@@ -85,18 +85,38 @@ router.post('/login', async function (req, res, next) {
 
 // based on id to get all information about user
 router.get('/:id', requireAuthentication, async function (req, res, next) {
-	if (req.user.id === Number(req.params.id) || (req.user.role === "admin")) {
+	// if (req.user.id === Number(req.params.id) || (req.user.role === "admin")) {
+	const userId = parseInt(req.params.id)
+	if (req.user.id === userId || isAdmin(req)){
 		try {
-			const user = await User.findByPk(req.params.id)
-			if (user) {
-				res.status(200).send({
-				username: user.name,
-				email: user.email,
-				role: user.role
+			// const user = await User.findByPk(req.params.id)
+			const user = await User.findByPk(userId, {
+				attributes: {exclude: ["createdAt", "updatedAt", "password"]},
+				include: {
+					model: Course,
+					as: "courses",
+					through: {attributes: []},
+					attributes: ["id"]
+				}
 			})
-		} else {
-			next()
-		}
+			if (user) {
+				userCourses = []
+				if (user.courses && user.courses.length > 0){
+					user.courses.forEach(course => {
+						userCourses.push(course.dataValues.id)
+					});
+				}
+
+				res.status(200).json({
+					id: user.dataValues.id,
+					name: user.dataValues.name,
+					email: user.dataValues.email,
+					role: user.dataValues.role,
+					courses: userCourses
+				})
+			} else {
+				next()
+			}
 		} catch (e) {
 			next(e)
 		}
