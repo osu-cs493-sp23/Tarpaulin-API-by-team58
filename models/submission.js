@@ -10,3 +10,10 @@ const Submission = sequelize.define('submission', {
 })
 
 exports.Submission = Submission
+
+exports.SubmissionClientFields = [
+    'studentId',
+    'timestamp',
+    'grade',
+    'file'
+]

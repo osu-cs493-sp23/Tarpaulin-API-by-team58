@@ -4,6 +4,8 @@ const multer = require('multer')
 const crypto = require("node:crypto")
 const { ValidationError } = require('sequelize')
 const {Assignment, AssignmentClientFields} = require('../models/assignment')
+const { validateAgainstSchema } = require('../lib/dataValidation')
+const { SubmissionClientFields } = require('../models/submission')
 
 const router = Router()
 
@@ -91,7 +93,23 @@ router.delete('/:id', async function(req, res, next){
 
 // upload
 const upload = multer({
-    
+    dest : 'uploads/'
+})
+
+/*
+create and store a new submission to database.
+oncourseId 'student' can create submission
+*/
+router.post('/:id/submissions', upload.single('submission'), async function (req, res, next) {
+    const assignmentId = req.params.id
+    if (validateAgainstSchema(req.body, SubmissionClientFields)) {
+        console.log("   -- req.file:", req.file)
+        console.log("   -- req.body:", req.body)
+    } else {
+        res.status(400).send({
+            error: "Request body is not a valid photo object"
+        })
+    }
 })
 
 /*
@@ -99,15 +117,13 @@ Returns the list of all Submissions.
 only 'admin' or courseId 'instructor' can get submission
 */
 router.get('/:id/submissions', async function (req, res, next) {
-    const assignmentId = req.params.id
+    try {
+        const assignmentId = req.params.id
+
+    } catch (err) {
+
+    }
 })
 
-/*
-create and store a new submission to database.
-oncourseId 'student' can create submission
-*/
-router.post('/:id/submissions', async function (req, res, next) {
-    const assignmentId = req.params.id
-})
 
 module.exports = router

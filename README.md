@@ -18,6 +18,11 @@ docker  run -d --name tarpaulin-server `
 mysql
 ```
 
+* setting up redis server in Docker
+```bash
+docker run -d --name redis-server -p "6379:6379" redis:latest
+```
+
 * When the database server is running in Docker, use `docker exec -it tarpaulin-server /bin/bash` to enter bash
     * run `mysql -u team58 -p tarpaulin` to access the database
 
