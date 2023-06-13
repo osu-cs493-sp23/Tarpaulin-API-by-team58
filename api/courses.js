@@ -257,6 +257,20 @@ router.post("/", requireAuthentication, async function (req, res, next){
 		return
 	}
 
+	var instructor = null
+	try {
+		instructor = await User.findByPk(newCourse.instructorId)
+	} catch (err){
+		next(err)
+	}
+
+	if (!instructor){
+		res.status(400).json({
+			error: `No instructor exists with id ${newCourse.instructorId}`
+		})
+		return
+	}
+
 	//query the database
 	var course = {}
 	try {
