@@ -9,6 +9,8 @@ const { validateAgainstSchema } = require('../lib/dataValidation')
 const { SubmissionClientFields, Submission } = require('../models/submission')
 const { requireAuthentication } = require('../lib/auth')
 const { Course } = require('../models/course')
+const { User } = require('../models/user')
+const { getOnly, generateHATEOASlinks } = require('../lib/hateoasHelpers.js')
 
 const router = Router()
 
@@ -142,18 +144,24 @@ create and store a new submission to database.
 only courseId 'student' can create submission
 */
 router.post('/:id/submissions',requireAuthentication, upload.single('file'), async function (req, res, next) {
-    course = await Course.findByPk(parseInt(req.body.courseId) || 0, {
+    const assignmentId = req.params.id
+    const assignment = await Assignment.findByPk(assignmentId)
+    
+    if (!assignment) {
+        return next()
+    }
+    
+    course = await Course.findByPk(assignment.dataValues.courseId || 0, {
         include: {
                 model: User, as: "users",
                 where: {role: "student"}, 
                 through: {attributes: []}, 
                 attributes: ["id"]}})
-    if (req.user.role === "student" && (course.dataValues.users.find() === req.user.id)) {
+    if (req.user.role === "student" && (course.dataValues.users.find(student => { return student.id === req.user.id}))) {
         console.log("   -- req.file:", req.file)
         console.log("   -- req.body:", req.body)
         try {
-            const assignmentId = req.params.id
-            const assignment = await Assignment.findByPk(assignmentId)  
+             
             //const fileData = fs.readFileSync(req.file.path)
             const submissionBody = {
                 assignmentId: assignmentId,
@@ -188,7 +196,12 @@ Returns the list of all Submissions.
 only 'admin' or courseId 'instructor' can get submission
 */
 router.get('/:id/submissions',requireAuthentication, async function (req, res, next) {
-    course = await Course.findByPk(parseInt(req.body.courseId) || 0, {
+    const assignmentId = req.params.id
+    const assignment = await Assignment.findByPk(assignmentId)
+    if (!assignment) {
+        return next()
+    }
+    course = await Course.findByPk(assignment.dataValues.courseId || 0, {
         include: {
                 model: User, as: "users",
                 where: {role: "instructor"}, 
@@ -197,23 +210,58 @@ router.get('/:id/submissions',requireAuthentication, async function (req, res, n
     if (req.user.role === "admin" || 
         (req.user.role === "instructor" && (course.dataValues.users[0].id === req.user.id))) {
         try {
-            const assignmentId = req.params.id
-            const assignment = await Assignment.findByPk(assignmentId)
-    
             if (assignment) {
-                const result = await Submission.findAll({
-                    where: {assignmentId: assignmentId}
+                const submissionPerPage = 10
+                //generate offset based on requested page
+                var page = parseInt(req.query.page) || 1
+                page = page < 1 ? 1 : page
+                var offset = (page - 1) * submissionPerPage
+
+                //query the database
+                var queryStringParams = getOnly(req.query, ["studentId"])
+                var result = null
+                try {
+                    result = await Submission.findAndCountAll({
+                        where: queryStringParams,
+                        limit: submissionPerPage,
+                        offset: offset,
+                        attributes: {include: ["assignmentId", "studentId", "timestamp", "grade", "file"]}
+                    })
+                } catch (err){
+                    next(err)
+                    return
+                }
+                resultsPage = []
+                result.rows.forEach((submission) => {
+                    resultsPage.push({
+                        assignmentId: submission.assignmentId,
+                        studentId: submission.studentId,
+                        timestamp: submission.timestamp,
+                        grade: submission.grade,
+                        file: `/${submission.file}`
+                    })
                 })
-    
-                const resBody = result.map(submission =>({
-                    //id: submission.id,
-                    assignmentId: submission.assignmentId,
-                    studentId: submission.studentId,
-                    timestamp: submission.timestamp,
-                    grade: submission.grade,
-                    file: `/${submission.file}`,
-                }))
-                res.status(200).send({submission: resBody})
+
+                //generate response with appropriate HATEOAS links
+                var lastPage = Math.ceil(result.count / submissionPerPage)
+                res.status(200).json({
+                    courses: resultsPage,
+                    links: generateHATEOASlinks(
+                        req.originalUrl.split("?")[0],
+                        page,
+                        lastPage,
+                        queryStringParams
+                    )
+                })
+                // const resBody = result.map(submission =>({
+                //     //id: submission.id,
+                //     assignmentId: submission.assignmentId,
+                //     studentId: submission.studentId,
+                //     timestamp: submission.timestamp,
+                //     grade: submission.grade,
+                //     file: `/${submission.file}`,
+                // }))
+                //res.status(200).send({submission: resBody})
             } else {
                 next()
             }

@@ -1,3 +1,4 @@
+require('dotenv').config()
 const {User, UserClientFields} = require('./models/user.js')
 const sequelize = require("./lib/sequelize.js")
 
