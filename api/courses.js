@@ -107,6 +107,20 @@ router.get("/:courseId", async function (req, res, next){
 router.get("/:courseId/assignments", async function (req, res, next){
 	var courseId = parseInt(req.params.courseId) || 0
 
+	//make sure the course exists in the database
+	var course = null
+	try {
+		course = await Course.findByPk(courseId)
+	} catch (err){
+		next(err)
+		return
+	}
+
+	if (!course){
+		next()
+		return
+	}
+
 	//query the database
 	var results = null
 	try {
@@ -122,7 +136,9 @@ router.get("/:courseId/assignments", async function (req, res, next){
 	}
 
 	if (results.length < 1){
-		next()
+		res.status(200).json({
+			assignments: []
+		})
 		return
 	}
 
@@ -224,9 +240,15 @@ router.get("/:courseId/roster", requireAuthentication, async function (req, res,
 		return
 	}
 
+	//convert all student ids to strings for the csv file
+	const students = courseRosterObj.data.map(student => {
+		student.id = student.id.toString()
+		return student
+	})
+
 	var csv = null
 	try {
-		csv = await generateRosterCSV(courseRosterObj.data)
+		csv = await generateRosterCSV(students)
 	} catch (err){
 		next(err)
 	}
