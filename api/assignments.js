@@ -310,5 +310,57 @@ router.get('/:id/submissions',requireAuthentication, async function (req, res, n
     }
 })
 
+router.patch('/:id/submissions', requireAuthentication , async function (req, res, next) {
+    const assignmentId = parseInt(req.params.id) || 0
+    const assignment = await Assignment.findByPk(assignmentId)
+    if (!assignment) {
+        //404 for no existing assignment
+        return next()
+    }
+
+    try {
+        course = await Course.findByPk(assignment.dataValues.courseId || 0, {
+            include: {
+                    model: User, as: "users",
+                    where: {role: "instructor"}, 
+                    through: {attributes: []}, 
+                    attributes: ["id"]}})
+    } catch(err) {
+        //console.log("123")
+        next(err)
+        return
+    }
+
+    if (req.user.role === "instructor" && (course.dataValues.users[0].id === req.user.id)) {
+        try {
+            console.log(req.body.studentId)
+            console.log(assignmentId)
+            console.log(req.body.grade)
+            const result = await Submission.update(req.body
+                , {
+                where: {
+                    assignmentId: assignmentId,
+                    studentId: req.body.studentId,
+                    },
+                // fields: SubmissionClientFields.filter(
+                //         field => field !== 'studentId'
+                // )
+            })
+            if (result[0] > 0){
+                res.status(204).send()
+            } else {
+                next()
+            }
+        } catch(e) {
+            //console.log("123")
+            next(e)
+        }
+    } else {
+        res.status(403).send({ error: "Unauthorized to access with current credential" })
+    }
+
+
+})
+
 
 module.exports = router
