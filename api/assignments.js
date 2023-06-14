@@ -8,6 +8,7 @@ const {Assignment, AssignmentClientFields} = require('../models/assignment')
 const { validateAgainstSchema } = require('../lib/dataValidation')
 const { SubmissionClientFields, Submission } = require('../models/submission')
 const { requireAuthentication } = require('../lib/auth')
+const { Course } = require('../models/course')
 
 const router = Router()
 
@@ -17,7 +18,14 @@ and adds it to the application's database.
 'admin' or courseId 'instructor' can create assignment
 */
 router.post('/', requireAuthentication, async function (req, res, next){
-    if (req.user.role === "admin" || req.user.role === "instructor") {
+    course = await Course.findByPk(parseInt(req.body.courseId) || 0, {
+        include: {
+                model: User, as: "users",
+                where: {role: "instructor"}, 
+                through: {attributes: []}, 
+                attributes: ["id"]}})
+    if (req.user.role === "admin" || 
+        (req.user.role === "instructor" && (course.dataValues.users[0].id === req.user.id))) {
         try {
             const assignment = await Assignment.create(
                 req.body, AssignmentClientFields
@@ -59,7 +67,14 @@ Submission cant be modified via this endpoint.
 only 'admin' or courseId 'instructor' can update assignment
 */
 router.patch('/:id',requireAuthentication, async function(req, res, next) {
-    if (req.user.role === "admin" || req.user.role === "instructor") {
+    course = await Course.findByPk(parseInt(req.body.courseId) || 0, {
+        include: {
+                model: User, as: "users",
+                where: {role: "instructor"}, 
+                through: {attributes: []}, 
+                attributes: ["id"]}})
+    if (req.user.role === "admin" || 
+        (req.user.role === "instructor" && (course.dataValues.users[0].id === req.user.id))) {
         try {
             const assignmentId = req.params.id
             //const assignment = await Assignment.findByPk(assignmentId)
@@ -85,7 +100,14 @@ delete the data for the Assignment.
 only 'admin' or courseId 'instructor' can update assignment
 */
 router.delete('/:id',requireAuthentication, async function(req, res, next){
-    if (req.user.role === "admin" || req.user.role === "instructor") {
+    course = await Course.findByPk(parseInt(req.body.courseId) || 0, {
+        include: {
+                model: User, as: "users",
+                where: {role: "instructor"}, 
+                through: {attributes: []}, 
+                attributes: ["id"]}})
+    if (req.user.role === "admin" || 
+        (req.user.role === "instructor" && (course.dataValues.users[0].id === req.user.id))) {
         try {
             const assignmentId = req.params.id
             //const assignment = await Assignment.findByPk(assignmentId)
@@ -117,10 +139,16 @@ const upload = multer({
 
 /*
 create and store a new submission to database.
-oncourseId 'student' can create submission
+only courseId 'student' can create submission
 */
 router.post('/:id/submissions',requireAuthentication, upload.single('file'), async function (req, res, next) {
-    if (req.user.role === "admin" || req.user.role === "instructor") {
+    course = await Course.findByPk(parseInt(req.body.courseId) || 0, {
+        include: {
+                model: User, as: "users",
+                where: {role: "student"}, 
+                through: {attributes: []}, 
+                attributes: ["id"]}})
+    if (req.user.role === "student" && (course.dataValues.users.find() === req.user.id)) {
         console.log("   -- req.file:", req.file)
         console.log("   -- req.body:", req.body)
         try {
@@ -160,7 +188,14 @@ Returns the list of all Submissions.
 only 'admin' or courseId 'instructor' can get submission
 */
 router.get('/:id/submissions',requireAuthentication, async function (req, res, next) {
-    if (req.user.role === "student") {
+    course = await Course.findByPk(parseInt(req.body.courseId) || 0, {
+        include: {
+                model: User, as: "users",
+                where: {role: "instructor"}, 
+                through: {attributes: []}, 
+                attributes: ["id"]}})
+    if (req.user.role === "admin" || 
+        (req.user.role === "instructor" && (course.dataValues.users[0].id === req.user.id))) {
         try {
             const assignmentId = req.params.id
             const assignment = await Assignment.findByPk(assignmentId)
