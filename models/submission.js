@@ -15,7 +15,7 @@ exports.Submission = Submission
 
 exports.SubmissionClientFields = [
     'studentId',
+    'file'
     //'timestamp',
     //'grade',
-    //'file',
 ]
