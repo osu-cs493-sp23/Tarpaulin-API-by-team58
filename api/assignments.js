@@ -20,7 +20,8 @@ and adds it to the application's database.
 'admin' or courseId 'instructor' can create assignment
 */
 router.post('/', requireAuthentication, async function (req, res, next){
-    try {
+    var course
+	try {
         course = await Course.findByPk(parseInt(req.body.courseId) || 0, {
             include: {
                     model: User, as: "users",
@@ -31,6 +32,14 @@ router.post('/', requireAuthentication, async function (req, res, next){
         next(err)
         return
     }
+
+	if (!course){
+		res.status(400).json({
+			error: `No course with id ${req.body.courseId} exists`
+		})
+		return
+	}
+
     if (req.user.role === "admin" || 
         (req.user.role === "instructor" && (course.dataValues.users[0].id === req.user.id))) {
         try {

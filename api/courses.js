@@ -414,7 +414,7 @@ router.post("/:courseId/students", requireAuthentication, async function (req, r
 		}
 	}
 
-	res.status(201).json(response)
+	res.status(200).json(response)
 })
 
 
