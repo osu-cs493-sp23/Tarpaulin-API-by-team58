@@ -5,32 +5,38 @@ const bcrypt = require("bcryptjs")
 
 const {Assignment} = require('../models/assignment')
 const {Course} = require('../models/course')
-const {User, UserClientFields} = require('../models/user')
-const {generateAuthToken, requireAuthentication, isAdmin, optionalAuthentication} = require('../lib/hateoasHelpers')
+const {User, userSchema, UserClientFields} = require('../models/user')
+const {generateAuthToken, requireAuthentication, isAdmin, optionalAuthentication} = require('../lib/auth.js')
+const {validateAgainstSchema} = require("../lib/dataValidation")
 
 
 const router = Router()
 
 // create user
 router.post('/', optionalAuthentication, async function (req, res, next){
-	if (req.user && !(req.user.role === "admin") && req.body.role === "admin"){
+	if (!isAdmin(req) && (req.body.role === "admin" || req.body.role === "instructor")){
 		res.status(403).json({
-			error: "Invalid role to create Admin"
+			error: "Invalid role to create new user with specified role."
 		})
 		return
 	}
+
+	if (!validateAgainstSchema(req.body, userSchema)){
+		res.status(400).json({
+			error: "The request body was either not present or did not contain a valid User object containing required fields: \"name,\" \"email,\" \"password,\" and \"role.\""
+		})
+		return
+	}
+
 	try{
 		const user = await User.create(req.body,UserClientFields)
-		const hash = await bcrypt.hashSync(user.password, 8)
-		user.password = hash
-		console.log(" -- userToInsert:", user)
 
 		res.status(201).send({
 			id: user.id
 		})
 	} catch (e) {
 		if (e instanceof ValidationError) {
-			res.status(400).send({ error: e.message})
+			res.status(400).send({ error: `User already exists with email: ${req.body.email}.`})
 		} else {
 			next(e)
 		}
@@ -46,8 +52,10 @@ router.post('/login', async function (req, res, next) {
 			})
 
 			if (!userData){
-				res.status(404).json({
-					error: `No user with email: ${req.body.email}`
+				/* Best practice (and the api spec) dictates a 401 is sent if 
+				the user does not exist or has invalid credentials */
+				res.status(401).send({
+					error: "invalid authentication credential"
 				})
 				return
 			}
@@ -62,7 +70,7 @@ router.post('/login', async function (req, res, next) {
 				})
 			}else{
 				res.status(401).send({
-				error: "invalid authentication credential"
+					error: "invalid authentication credential"
 				})
 			}
 		} catch(e) {
@@ -70,25 +78,43 @@ router.post('/login', async function (req, res, next) {
 		}
 	} else {
 		res.status(400).send({
-			err: "request body requires `email` and `password`."
+			error: "request body requires `email` and `password`."
 		})
 	}
 })
 
 // based on id to get all information about user
 router.get('/:id', requireAuthentication, async function (req, res, next) {
-	if (req.user.id === Number(req.params.id) || (req.user.role === "admin")) {
+	const userId = parseInt(req.params.id)
+	if (req.user.id === userId || isAdmin(req)){
 		try {
-			const user = await User.findByPk(req.params.id)
-			if (user) {
-				res.status(200).send({
-				username: user.name,
-				email: user.email,
-				role: user.role
+			const user = await User.findByPk(userId, {
+				attributes: {exclude: ["createdAt", "updatedAt", "password"]},
+				include: {
+					model: Course,
+					as: "courses",
+					through: {attributes: []},
+					attributes: ["id"]
+				}
 			})
-		} else {
-			next()
-		}
+			if (user) {
+				userCourses = []
+				if (user.courses && user.courses.length > 0){
+					user.courses.forEach(course => {
+						userCourses.push(course.dataValues.id)
+					});
+				}
+
+				res.status(200).json({
+					id: user.dataValues.id,
+					name: user.dataValues.name,
+					email: user.dataValues.email,
+					role: user.dataValues.role,
+					courses: userCourses
+				})
+			} else {
+				next()
+			}
 		} catch (e) {
 			next(e)
 		}
