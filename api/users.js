@@ -84,40 +84,43 @@ router.post('/login', async function (req, res, next) {
 })
 
 // based on id to get all information about user
-router.get('/:id', requireAuthentication, async function (req, res, next) {
+// router.get('/:id', requireAuthentication, async function (req, res, next) {
+router.get("/:id", optionalAuthentication, async function (req, res, next){
 	const userId = parseInt(req.params.id)
-	if (req.user.id === userId || isAdmin(req)){
-		try {
-			const user = await User.findByPk(userId, {
-				attributes: {exclude: ["createdAt", "updatedAt", "password"]},
-				include: {
-					model: Course,
-					as: "courses",
-					through: {attributes: []},
-					attributes: ["id"]
-				}
-			})
-			if (user) {
-				userCourses = []
-				if (user.courses && user.courses.length > 0){
-					user.courses.forEach(course => {
-						userCourses.push(course.dataValues.id)
-					});
-				}
-
-				res.status(200).json({
-					id: user.dataValues.id,
-					name: user.dataValues.name,
-					email: user.dataValues.email,
-					role: user.dataValues.role,
-					courses: userCourses
-				})
-			} else {
-				next()
+	var user = null
+	try {
+		user = await User.findByPk(userId, {
+			attributes: {exclude: ["createdAt", "updatedAt", "password"]},
+			include: {
+				model: Course,
+				as: "courses",
+				through: {attributes: []},
+				attributes: ["id"]
 			}
-		} catch (e) {
-			next(e)
+		})
+	} catch (err){
+		next(err)
+		return
+	}
+	if (!user){
+		next()
+		return
+	}
+	if (req.user && (req.user.id === userId || isAdmin(req))){
+		userCourses = []
+		if (user.courses && user.courses.length > 0){
+			user.courses.forEach(course => {
+				userCourses.push(course.dataValues.id)
+			});
 		}
+
+		res.status(200).json({
+			id: user.dataValues.id,
+			name: user.dataValues.name,
+			email: user.dataValues.email,
+			role: user.dataValues.role,
+			courses: userCourses
+		})
 	} else {
 		res.status(403).send({
 			error: "Unauthorized to access with current credential"
