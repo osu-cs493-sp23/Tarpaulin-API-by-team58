@@ -6,7 +6,7 @@ const { ValidationError } = require('sequelize')
 
 //course api helpers and constants
 const { generateHATEOASlinks, getOnly } = require("../lib/hateoasHelpers.js")
-const { requireAuthentication } = require("../lib/auth.js")
+const { requireAuthentication, optionalAuthentication, isAdmin } = require("../lib/auth.js")
 const { validateAgainstSchema, containsAtLeastOneSchemaField } = require("../lib/dataValidation.js")
 const { generateRosterCSV } = require("../lib/csv.js")
 const EXCLUDE_ATTRIBUTES_LIST = ["createdAt", "updatedAt"]
@@ -263,8 +263,10 @@ router.get("/:courseId/roster", requireAuthentication, async function (req, res,
  * 
  * Adds a new course to the database as long as it does not already exist.
  */
-router.post("/", requireAuthentication, async function (req, res, next){
-	if (!(req.user.role === "admin")){
+// router.post("/", requireAuthentication, async function (req, res, next){
+router.post("/", optionalAuthentication, async function (req, res, next){
+	// if (!(req.user.role === "admin")){
+	if (!isAdmin(req)){
 		res.status(403).json({
 			error: "Unauthorized access to specified resource."
 		})
