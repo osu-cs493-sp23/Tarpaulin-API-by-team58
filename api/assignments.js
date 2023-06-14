@@ -134,7 +134,9 @@ const upload = multer({
     storage: multer.diskStorage({
         destination: `uploads`,
         filename: (req, file, callback) => {
-            callback(null, file.originalname)
+            const filename = crypto.pseudoRandomBytes(16).toString("hex")
+            const extension = file.mimetype.split("/")[1]
+            callback(null, `${filename}.${extension}`)
         }
     })
 })
@@ -245,7 +247,7 @@ router.get('/:id/submissions',requireAuthentication, async function (req, res, n
                 //generate response with appropriate HATEOAS links
                 var lastPage = Math.ceil(result.count / submissionPerPage)
                 res.status(200).json({
-                    courses: resultsPage,
+                    submission: resultsPage,
                     links: generateHATEOASlinks(
                         req.originalUrl.split("?")[0],
                         page,
