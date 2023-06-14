@@ -1,11 +1,12 @@
 const { Router } = require('express')
 const multer = require('multer')
 
+const fs = require('fs')
 const crypto = require("node:crypto")
 const { ValidationError } = require('sequelize')
 const {Assignment, AssignmentClientFields} = require('../models/assignment')
 const { validateAgainstSchema } = require('../lib/dataValidation')
-const { SubmissionClientFields } = require('../models/submission')
+const { SubmissionClientFields, Submission } = require('../models/submission')
 
 const router = Router()
 
@@ -93,22 +94,65 @@ router.delete('/:id', async function(req, res, next){
 
 // upload
 const upload = multer({
-    dest : 'uploads/'
+    storage: multer.diskStorage({
+        destination: `uploads`,
+        filename: (req, file, callback) => {
+            callback(null, file.originalname)
+        }
+    })
 })
+
+// const upload = multer({
+//     storage: multer.memoryStorage()
+// })
 
 /*
 create and store a new submission to database.
 oncourseId 'student' can create submission
 */
-router.post('/:id/submissions', upload.single('submission'), async function (req, res, next) {
+router.post('/:id/submissions', upload.single('file'), async function (req, res, next) {
     const assignmentId = req.params.id
-    if (validateAgainstSchema(req.body, SubmissionClientFields)) {
-        console.log("   -- req.file:", req.file)
-        console.log("   -- req.body:", req.body)
-    } else {
-        res.status(400).send({
-            error: "Request body is not a valid photo object"
-        })
+    
+    console.log("   -- req.file:", req.file)
+    console.log("   -- req.body:", req.body)
+    try {
+        const assignment = await Assignment.findByPk(assignmentId)
+        
+        //const fileData = fs.readFileSync(req.file.path)
+        // const metadata = {
+        //     filename: req.file.originalname,
+        //     mimetype: req.file.mimetype,
+        //     size: req.file.size,
+        //     path: req.file.path
+        // }
+
+        // const fileObject = {
+        //     fileData: fileData,
+        //     metadata: metadata
+        // }
+
+        const submissionBody = {
+            assignmentId: assignmentId,
+            studentId: req.body.studentId,
+            file: req.file.path
+        }
+        if (assignment){
+            const submission = await Submission.create(submissionBody, SubmissionClientFields)
+            //const submission = await Submission.create({ file: fileBuffer })
+            res.status(201).send({
+                id: submission.id
+            })
+        } else {
+            next()
+        }
+    } catch (err) {
+        if (err instanceof ValidationError) {
+            res.status(400).send({
+                error: err.message
+            })
+        } else {
+            next(err)
+        }
     }
 })
 
@@ -119,9 +163,27 @@ only 'admin' or courseId 'instructor' can get submission
 router.get('/:id/submissions', async function (req, res, next) {
     try {
         const assignmentId = req.params.id
+        const assignment = await Assignment.findByPk(assignmentId)
 
+        if (assignment) {
+            const result = await Submission.findAll({
+                where: {assignmentId: assignmentId}
+            })
+
+            const resBody = result.map(submission =>({
+                //id: submission.id,
+                assignmentId: submission.assignmentId,
+                studentId: submission.studentId,
+                timestamp: submission.timestamp,
+                grade: submission.grade,
+                file: `/${submission.file}`,
+            }))
+            res.status(200).send({submission: resBody})
+        } else {
+            next()
+        }
     } catch (err) {
-
+        next(err)
     }
 })
 

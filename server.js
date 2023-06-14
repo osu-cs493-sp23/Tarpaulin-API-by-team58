@@ -2,6 +2,7 @@ require('dotenv').config()
 
 const express = require('express')
 const morgan = require('morgan')
+const path = require('path')
 
 const { limitRate, connectToRedisServer } = require("./lib/rateLimiting.js")
 const api = require('./api')
@@ -12,6 +13,8 @@ const port = process.env.PORT || 8000
 
 app.use(morgan('dev'))
 app.use(express.json())
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
 /* 
  * Send all requests through the rate limiter which will decide if they get 

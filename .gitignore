@@ -1,4 +1,5 @@
 node_modules/
 startdb.bash
 stopdb.bash
+uploads/
 .DS_Store
